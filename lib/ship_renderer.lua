@@ -6,10 +6,17 @@ function ShipRenderer.update(ship, dt)
 end
 
 function ShipRenderer.drawWorld(ship, sx, sy, dt)
-    love.graphics.setColor(1, 1, 1)
-    love.graphics.draw(ship:getCanvas(), sx, sy)
+    if ship.mode == "interior" and ship.int_canvas then
+        -- Exterior drawn dark as a "hull silhouette" behind interior
+        love.graphics.setColor(0.12, 0.12, 0.15, 1)
+        love.graphics.draw(ship.ext_canvas, sx, sy)
 
-    if ship.mode == "exterior" then
+        -- Interior drawn on top at full brightness
+        love.graphics.setColor(1, 1, 1, 1)
+        love.graphics.draw(ship.int_canvas, sx, sy)
+    else
+        love.graphics.setColor(1, 1, 1, 1)
+        love.graphics.draw(ship.ext_canvas, sx, sy)
         ShipRenderer.drawThrusters(ship, sx, sy)
     end
 end

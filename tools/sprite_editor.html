@@ -91,6 +91,7 @@ body { font-family: 'Segoe UI', system-ui, sans-serif; background: #111; color: 
     <button onclick="openFile()">Open</button>
     <button onclick="saveFile()">Save</button>
     <button id="overlayBtn" onclick="toggleOverlay()" style="border-color:#555;color:#666">Overlay</button>
+    <button id="symmetryBtn" onclick="toggleSymmetry()" style="border-color:#555;color:#666">Sym: Off</button>
   </div>
   <div class="spacer"></div>
   <div class="info">
@@ -143,6 +144,8 @@ body { font-family: 'Segoe UI', system-ui, sans-serif; background: #111; color: 
 
 <script>
 // ═══════════════════════════════════════════════════════════════
+const HANDLE_PAD = 16;
+// ═══════════════════════════════════════════════════════════════
 // COLOR PALETTE (game default)
 // ═══════════════════════════════════════════════════════════════
 const DEFAULT_COLORS = {
@@ -158,24 +161,26 @@ const DEFAULT_COLORS = {
 
 // Character -> color key mapping
 const CHAR_COLOR = {
-  '#': 'a', '@': 'b', '%': 'd', '/': 'b', '\\': 'b',
+  '#': 'a', '@': 'b', '/': 'b', '\\': 'b',
   '.': 'e', '[': 'a', ']': 'a', '{': 'a', '}': 'a',
-  '=': 'a', '!': 'a', '+': 'b', '~': 'h', 'C': 'g',
-  'o': 'c', '-': 'b', '|': 'b', '*': 'h', 'A': 'c',
+  '=': 'a', '!': 'b', '+': 'b', '~': 'h', 'C': 'g',
+  'o': 'c', '-': 'b', '|': 'a', '*': 'h', 'A': 'c',
   'v': 'f', '^': 'f', '<': 'f', '>': 'f',
+  'S': 'h', 'E': 'f',
 };
 
 const CHAR_DESC = {
-  '#': 'Hull body', '@': 'Hull border', '%': 'Damage', '/': 'Angle SE', '\\': 'Angle SW',
-  '.': 'Floor', '[': 'Corner TL', ']': 'Corner TR', '{': 'Corner BL', '}': 'Corner BR',
-  '=': 'H-wall', '!': 'V-wall', '+': 'Junction', '~': 'Conduit', 'C': 'Captain',
-  'o': 'Window', '-': 'Panel H', '|': 'Panel V', '*': 'Console', 'A': 'Airlock',
-  'v': 'Thruster D', '^': 'Thruster U', '<': 'Thruster L', '>': 'Thruster R',
+  '#': 'armor', '@': 'hull', '/': 'slant_se', '\\': 'slant_sw',
+  '.': 'deck', '[': 'corner_tl', ']': 'corner_tr', '{': 'corner_bl', '}': 'corner_br',
+  '=': 'hwall', '!': 'vwall', '+': 'junction', '~': 'conduit', 'C': 'captain',
+  'o': 'window', '-': 'hpanel', '|': 'vpanel', '*': 'console', 'A': 'airlock',
+  'v': 'thruster_d', '^': 'thruster_u', '<': 'thruster_l', '>': 'thruster_r',
+  'S': 'shield', 'E': 'engine',
 };
 
 // ASCII → rendered glyph (matches ship.lua CHAR_TO_GLYPH)
 const CHAR_TO_GLYPH = {
-  '#': '█', '@': '▓', '%': '▒', '.': '░',
+  '#': '█', '@': '▓', '.': '░',
   '/': '╱', '\\': '╲',
   '=': '═', '|': '║', '-': '─', '!': '│',
   '+': '┼', '~': '~',
@@ -183,13 +188,27 @@ const CHAR_TO_GLYPH = {
   'o': 'O', '*': '◆',
   'v': '▼', '^': '▲', '<': '◄', '>': '►',
   'A': 'A', 'C': 'C',
+  'S': '◈', 'E': '⊞',
 };
 function glyph(ch) { return CHAR_TO_GLYPH[ch] || ch; }
 
+// Canonical type names for property assignment (matches ship.lua CHAR_TYPE)
+const CHAR_TYPE = {
+  '#': 'armor', '@': 'hull', '.': 'deck',
+  '/': 'slant_se', '\\': 'slant_sw',
+  '=': 'hwall', '|': 'vwall', '-': 'hpanel', '!': 'vpanel',
+  '+': 'junction', '~': 'conduit',
+  '[': 'corner_tl', ']': 'corner_tr', '{': 'corner_bl', '}': 'corner_br',
+  'o': 'window', '*': 'console',
+  'v': 'thruster_d', '^': 'thruster_u', '<': 'thruster_l', '>': 'thruster_r',
+  'A': 'airlock', 'C': 'captain',
+  'S': 'shield', 'E': 'engine',
+};
+
 // Group definitions for palette
 const PALETTE_GROUPS = [
-  { label: 'Hull (Exterior)', chars: ['#', '@', '%', '/', '\\'] },
-  { label: 'Interior', chars: ['.', '[', ']', '{', '}', '=', '!', '+', '~', 'C'] },
+  { label: 'Hull (Exterior)', chars: ['#', '@', '/', '\\'] },
+  { label: 'Interior', chars: ['.', '[', ']', '{', '}', '=', '!', '+', '~', 'C', 'S', 'E'] },
   { label: 'Shared', chars: ['o', '-', '|', '*', 'A'] },
   { label: 'Thrusters', chars: ['v', '^', '<', '>'] },
 ];
@@ -224,6 +243,10 @@ let S = {
   selectedChar: '#',
   cellSize: 20,
   showOverlay: false,
+  symmetry: false,
+  symmetryLine: 17.5,
+  symmetryAxis: 17.0,
+  draggingAxis: false,
 };
 
 // ═══════════════════════════════════════════════════════════════
@@ -356,6 +379,15 @@ function toggleOverlay() {
   renderGrid();
 }
 
+function toggleSymmetry() {
+  S.symmetry = !S.symmetry;
+  const btn = document.getElementById('symmetryBtn');
+  btn.style.borderColor = S.symmetry ? '#0af' : '#555';
+  btn.style.color = S.symmetry ? '#0af' : '#666';
+  btn.textContent = S.symmetry ? 'Sym: On' : 'Sym: Off';
+  renderGrid();
+}
+
 function setLayer(layer) {
   // Stop preview animation if leaving
   if (animFrame) { cancelAnimationFrame(animFrame); animFrame = null; }
@@ -401,7 +433,7 @@ function getActiveGrid() {
   return S.exterior;
 }
 
-function drawGridOnCtx(ctx, grid, alpha) {
+function drawGridOnCtx(ctx, grid) {
   const cs = S.cellSize;
   for (let r = 0; r < S.height; r++) {
     for (let c = 0; c < S.width; c++) {
@@ -413,7 +445,7 @@ function drawGridOnCtx(ctx, grid, alpha) {
         const col = ck ? S.colors[ck] : [0.5, 0.5, 0.5];
         const hex = rgbToHex(col[0], col[1], col[2]);
 
-        const fillChars = new Set(['#', '@', '%', '.']);
+        const fillChars = new Set(['#', '@', '.']);
         if (ch === '/') {
           ctx.fillStyle = hex;
           ctx.beginPath();
@@ -432,14 +464,11 @@ function drawGridOnCtx(ctx, grid, alpha) {
           ctx.fillStyle = hex;
           ctx.fillRect(x, y, cs, cs);
         } else {
-          const g = glyph(ch);
           ctx.font = `${cs-3}px Consolas, "Courier New", monospace`;
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
           ctx.fillStyle = hex;
-          if (alpha < 1) ctx.globalAlpha = alpha;
-          ctx.fillText(g, x + cs/2, y + cs/2);
-          if (alpha < 1) ctx.globalAlpha = 1;
+          ctx.fillText(glyph(ch), x + cs/2, y + cs/2);
         }
       } else {
         ctx.strokeStyle = '#ffffff08';
@@ -453,7 +482,7 @@ function renderGrid(previewTime) {
   const canvas = document.getElementById('gridCanvas');
   const cs = S.cellSize;
   const w = S.width * cs;
-  const h = S.height * cs;
+  const h = S.height * cs + HANDLE_PAD;
   canvas.width = w;
   canvas.height = h;
   const ctx = canvas.getContext('2d');
@@ -462,24 +491,57 @@ function renderGrid(previewTime) {
   ctx.fillStyle = '#0a0a14';
   ctx.fillRect(0, 0, w, h);
 
+  // Handle bar background
+  ctx.fillStyle = '#12121e';
+  ctx.fillRect(0, 0, w, HANDLE_PAD);
+
   const grid = getActiveGrid();
+
+  // Translate all grid content below the handle bar
+  ctx.save();
+  ctx.translate(0, HANDLE_PAD);
 
   // Draw overlay (other layer) if toggled on
   if (S.showOverlay && S.activeLayer !== 'preview') {
     const otherGrid = S.activeLayer === 'exterior' ? S.interior : S.exterior;
     ctx.globalAlpha = 0.2;
-    drawGridOnCtx(ctx, otherGrid, 0.2);
+    drawGridOnCtx(ctx, otherGrid);
     ctx.globalAlpha = 1;
   }
 
   // Draw active grid on top
-  drawGridOnCtx(ctx, grid, 1);
+  drawGridOnCtx(ctx, grid);
 
   // Preview: animated thruster flames
   if (S.activeLayer === 'preview' && previewTime != null) {
     for (const t of S.thrusters) {
       drawFlame(ctx, t, previewTime, cs);
     }
+  }
+
+  ctx.restore();
+
+  // Symmetry axis line (canvas-absolute, spans full height)
+  if (S.symmetry) {
+    const ax = S.symmetryLine * cs;
+    ctx.strokeStyle = 'rgba(0,170,255,0.5)';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([6, 4]);
+    ctx.beginPath();
+    ctx.moveTo(ax, 0);
+    ctx.lineTo(ax, h);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    // Drag handle in the handle bar
+    const hy = HANDLE_PAD / 2;
+    ctx.fillStyle = 'rgba(0,170,255,0.8)';
+    ctx.beginPath();
+    ctx.arc(ax, hy, 5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#fff';
+    ctx.beginPath();
+    ctx.arc(ax, hy, 2, 0, Math.PI * 2);
+    ctx.fill();
   }
 }
 
@@ -501,24 +563,53 @@ document.addEventListener('DOMContentLoaded', function() {
   let painting = false;
 
   canvas.addEventListener('mousedown', function(e) {
+    if (S.symmetry && nearAxis(e)) {
+      S.draggingAxis = true;
+      return;
+    }
     painting = true;
     paintAt(e);
   });
   canvas.addEventListener('mousemove', function(e) {
-    if (painting) paintAt(e);
+    if (S.draggingAxis) { dragAxis(e); return; }
+    if (painting) { paintAt(e); return; }
+    canvas.style.cursor = (S.symmetry && nearAxis(e)) ? 'col-resize' : 'crosshair';
   });
-  canvas.addEventListener('mouseup', () => painting = false);
-  canvas.addEventListener('mouseleave', () => painting = false);
+  canvas.addEventListener('mouseup', () => { painting = false; S.draggingAxis = false; });
+  canvas.addEventListener('mouseleave', () => { painting = false; S.draggingAxis = false; });
   canvas.addEventListener('contextmenu', function(e) {
     e.preventDefault();
-    const r = Math.floor(e.offsetY / S.cellSize);
+    const r = Math.floor((e.offsetY - HANDLE_PAD) / S.cellSize);
     const c = Math.floor(e.offsetX / S.cellSize);
     if (r >= 0 && r < S.height && c >= 0 && c < S.width) {
-      setCell(r, c, ' ');
+      placeWithSymmetry(r, c, ' ');
       renderAll();
     }
   });
 });
+
+function nearAxis(e) {
+  const lx = S.symmetryLine * S.cellSize;
+  const my = e.offsetY;
+  return my >= 0 && my < HANDLE_PAD && Math.abs(e.offsetX - lx) < 8;
+}
+
+function dragAxis(e) {
+  const col = Math.max(0, Math.min(S.width - 1, e.offsetX / S.cellSize));
+  S.symmetryLine = Math.round(col * 2) / 2;
+  S.symmetryAxis = S.symmetryLine - 0.5;
+  renderGrid();
+}
+
+function placeWithSymmetry(r, c, ch) {
+  setCell(r, c, ch);
+  if (S.symmetry) {
+    const mc = Math.round(2 * S.symmetryAxis - c);
+    if (mc >= 0 && mc < S.width && mc !== c) {
+      setCell(r, mc, ch);
+    }
+  }
+}
 
 function paintAt(e) {
   if (S.activeLayer === 'preview') return;
@@ -526,10 +617,10 @@ function paintAt(e) {
   const rect = canvas.getBoundingClientRect();
   const x = e.clientX - rect.left;
   const y = e.clientY - rect.top;
-  const r = Math.floor(y / S.cellSize);
+  const r = Math.floor((y - HANDLE_PAD) / S.cellSize);
   const c = Math.floor(x / S.cellSize);
   if (r >= 0 && r < S.height && c >= 0 && c < S.width) {
-    setCell(r, c, S.selectedChar);
+    placeWithSymmetry(r, c, S.selectedChar);
     renderAll();
   }
 }
@@ -719,13 +810,12 @@ function initBlankShip(w, h) {
   S.exterior = [];
   S.interior = [];
   S.thrusters = [];
+  S.symmetryLine = w / 2;
+  S.symmetryAxis = w / 2 - 0.5;
   for (let r = 0; r < h; r++) {
     S.exterior[r] = new Array(w).fill(' ');
     S.interior[r] = new Array(w).fill(' ');
   }
-
-  // Generate a basic hull outline
-  generateHull(w, h);
 
   autoUpdateThrusters();
   renderAll();
@@ -918,6 +1008,8 @@ function parseShipFile(content) {
   S.exterior = pad(newShip.exterior, S.height, S.width);
   S.interior = pad(newShip.interior, S.height, S.width);
   S.thrusters = newShip.thrusters;
+  S.symmetryLine = S.width / 2;
+  S.symmetryAxis = S.width / 2 - 0.5;
 
   document.getElementById('propName').value = S.name;
   document.getElementById('propFontSize').value = S.font_size;
@@ -947,6 +1039,8 @@ document.addEventListener('keydown', function(e) {
   if (e.key === '1' && !e.ctrlKey) setLayer('exterior');
   if (e.key === '2' && !e.ctrlKey) setLayer('interior');
   if (e.key === '3' && !e.ctrlKey) setLayer('preview');
+  // Symmetry toggle
+  if (e.key === 'm' && !e.ctrlKey) toggleSymmetry();
 });
 
 // ═══════════════════════════════════════════════════════════════
