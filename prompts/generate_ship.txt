@@ -49,14 +49,22 @@ Char  Purpose                        Color key
 COLOR PALETTE
 ════════════════════════════════════════════════════════
 
-a = 0.55, 0.55, 0.62  light gray     (hull, thick walls)
-b = 0.40, 0.40, 0.48  medium gray    (border, panel lines)
-c = 0.30, 0.80, 1.00  cyan           (windows, airlocks)
-d = 0.50, 0.50, 0.58  darker gray    (damage)
-e = 0.65, 0.65, 0.72  lightest gray  (floor)
-f = 0.80, 0.20, 0.20  red            (thruster nozzles)
-g = 0.20, 0.25, 0.35  dark slate     (captain's seat)
-h = 0.10, 0.50, 0.90  blue           (energy, consoles)
+a = 0.62, 0.62, 0.62  #9E9E9E  medium gray   (hull, thick walls)
+b = 0.38, 0.38, 0.38  #616161  gray          (border, panel lines)
+c = 0.50, 0.87, 0.92  #80DEEA  light cyan    (windows, airlocks)
+d = 0.29, 0.24, 0.27  #4B3D44  dark brown    (damage)
+e = 1.00, 0.98, 0.77  #FFF9C4  cream         (floor)
+f = 0.84, 0.00, 0.00  #D50000  red           (thruster nozzles)
+g = 0.47, 0.33, 0.28  #795548  brown         (captain's seat)
+h = 0.01, 0.47, 0.74  #0277BD  blue          (energy, consoles)
+i = 0.00, 0.00, 0.00  #000000  black         (void)
+j = 0.67, 0.28, 0.74  #AB47BC  purple        (special)
+k = 1.00, 0.76, 0.03  #FFC107  amber         (warning)
+l = 0.61, 0.80, 0.40  #9CCC65  light green   (shield)
+m = 1.00, 1.00, 1.00  #FFFFFF  white         (highlight)
+n = 1.00, 0.25, 0.51  #FF4081  pink          (special)
+o = 0.67, 0.61, 0.56  #AB9B8E  beige         (hull alt)
+p = 1.00, 0.56, 0.00  #FF8F00  orange        (engine)
 
 ════════════════════════════════════════════════════════
 OUTPUT FORMAT

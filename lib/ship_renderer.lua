@@ -7,11 +7,6 @@ end
 
 function ShipRenderer.drawWorld(ship, sx, sy, dt)
     if ship.mode == "interior" and ship.int_canvas then
-        -- Exterior drawn dark as a "hull silhouette" behind interior
-        love.graphics.setColor(0.12, 0.12, 0.15, 1)
-        love.graphics.draw(ship.ext_canvas, sx, sy)
-
-        -- Interior drawn on top at full brightness
         love.graphics.setColor(1, 1, 1, 1)
         love.graphics.draw(ship.int_canvas, sx, sy)
     else

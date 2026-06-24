@@ -117,6 +117,7 @@ end
 -- Returns a command table describing what should happen, or nil.
 function Interaction:interact(player)
     if self.state == "near_airlock_enter" then
+        self.state = "idle"
         return {
             action = "board",
             ship   = self.near_ship,
@@ -124,6 +125,7 @@ function Interaction:interact(player)
         }
 
     elseif self.state == "near_airlock_exit" then
+        self.state = "idle"
         return {
             action = "disembark",
             ship   = self.near_ship,

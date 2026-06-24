@@ -149,14 +149,22 @@ const HANDLE_PAD = 16;
 // COLOR PALETTE (game default)
 // ═══════════════════════════════════════════════════════════════
 const DEFAULT_COLORS = {
-  a: [0.55, 0.55, 0.62], // light gray   - hull, thick walls
-  b: [0.40, 0.40, 0.48], // medium gray  - border, panel lines
-  c: [0.30, 0.80, 1.00], // cyan         - windows, airlocks
-  d: [0.50, 0.50, 0.58], // darker gray  - damage
-  e: [0.65, 0.65, 0.72], // lightest gray - floor
-  f: [0.80, 0.20, 0.20], // red          - thruster nozzles
-  g: [0.20, 0.25, 0.35], // dark slate   - captain's seat
-  h: [0.10, 0.50, 0.90], // blue         - energy, consoles
+  a: [0.62, 0.62, 0.62], // #9E9E9E  hull, thick walls
+  b: [0.38, 0.38, 0.38], // #616161  border, panel lines
+  c: [0.50, 0.87, 0.92], // #80DEEA  windows, airlocks
+  d: [0.29, 0.24, 0.27], // #4B3D44  damage
+  e: [1.00, 0.98, 0.77], // #FFF9C4  floor
+  f: [0.84, 0.00, 0.00], // #D50000  thruster nozzles
+  g: [0.47, 0.33, 0.28], // #795548  captain's seat
+  h: [0.01, 0.47, 0.74], // #0277BD  energy, consoles
+  i: [0.00, 0.00, 0.00], // #000000  void
+  j: [0.67, 0.28, 0.74], // #AB47BC  special
+  k: [1.00, 0.76, 0.03], // #FFC107  warning
+  l: [0.61, 0.80, 0.40], // #9CCC65  shield
+  m: [1.00, 1.00, 1.00], // #FFFFFF  highlight
+  n: [1.00, 0.25, 0.51], // #FF4081  special
+  o: [0.67, 0.61, 0.56], // #AB9B8E  hull alt
+  p: [1.00, 0.56, 0.00], // #FF8F00  engine
 };
 
 // Character -> color key mapping
@@ -303,7 +311,7 @@ function buildProps() {
   html += `<label>Font Size</label><input type="number" id="propFontSize" value="${S.font_size}" min="8" max="64" onchange="S.font_size=+this.value;renderAll()">`;
   html += `<label>Grid</label><div style="font-size:12px;color:#888"><span id="propDims">${S.width}&times;${S.height}</span></div>`;
   html += '<h3 style="margin-top:12px">Colors</h3>';
-  const keys = 'abcdefgh';
+  const keys = 'abcdefghijklmnop';
   for (const k of keys) {
     const c = S.colors[k];
     const hex = rgbToHex(c[0], c[1], c[2]);
@@ -327,7 +335,7 @@ function buildProps() {
 }
 
 function CHAR_DESC_OF_KEY(k) {
-  const map = { a: 'Hull', b: 'Border', c: 'Cyan', d: 'Damage', e: 'Floor', f: 'Thruster', g: 'Seat', h: 'Energy' };
+  const map = { a: 'Hull', b: 'Border', c: 'Window', d: 'Damage', e: 'Floor', f: 'Thruster', g: 'Seat', h: 'Energy', i: 'Void', j: 'Purple', k: 'Warning', l: 'Shield', m: 'White', n: 'Pink', o: 'Beige', p: 'Engine' };
   return map[k] || '';
 }
 

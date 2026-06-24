@@ -53,16 +53,7 @@ local CHAR_TO_SHAPE = {
     ["+"] = "junction",
 }
 
-local DEFAULT_COLORS = {
-    a = {0.55, 0.55, 0.62},
-    b = {0.40, 0.40, 0.48},
-    c = {0.30, 0.80, 1.00},
-    d = {0.50, 0.50, 0.58},
-    e = {0.65, 0.65, 0.72},
-    f = {0.80, 0.20, 0.20},
-    g = {0.20, 0.25, 0.35},
-    h = {0.10, 0.50, 0.90},
-}
+local DEFAULT_COLORS = GridRenderer.DEFAULT_COLORS
 
 local THRUSTER_CHARS = {
     ["v"] = "down", ["^"] = "up",

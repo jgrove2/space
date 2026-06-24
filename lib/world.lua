@@ -123,18 +123,16 @@ function World:_handleInteraction(cmd)
     end
 end
 
--- Find the closest airlock tile on the target layer to match a source tile.
--- For small ships with two airlocks this picks the nearest one by row/col.
 function World:_findMatchingAirlock(ship, source_tile, target_layer)
+    local src_wx, src_wy = ship:gridToWorld(source_tile.row, source_tile.col)
     local best, best_dist
     for _, a in ipairs(ship.airlocks) do
         if a.layer == target_layer then
-            local dr   = a.row - source_tile.row
-            local dc   = a.col - source_tile.col
-            local dist = dr * dr + dc * dc
+            local awx, awy = ship:gridToWorld(a.row, a.col)
+            local dx, dy   = awx - src_wx, awy - src_wy
+            local dist     = dx * dx + dy * dy
             if not best or dist < best_dist then
-                best      = a
-                best_dist = dist
+                best, best_dist = a, dist
             end
         end
     end

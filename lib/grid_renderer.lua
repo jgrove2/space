@@ -7,6 +7,28 @@
 
 local GridRenderer = {}
 
+-- Default color palette (canonical source — 16 colors a–p)
+local DEFAULT_COLORS = {
+    a = {0.62, 0.62, 0.62},  -- #9E9E9E  hull, thick walls
+    b = {0.38, 0.38, 0.38},  -- #616161  border, panel lines
+    c = {0.50, 0.87, 0.92},  -- #80DEEA  windows, airlocks
+    d = {0.29, 0.24, 0.27},  -- #4B3D44  damage
+    e = {1.00, 0.98, 0.77},  -- #FFF9C4  floor
+    f = {0.84, 0.00, 0.00},  -- #D50000  thruster nozzles
+    g = {0.47, 0.33, 0.28},  -- #795548  captain's seat
+    h = {0.01, 0.47, 0.74},  -- #0277BD  energy, consoles
+    i = {0.00, 0.00, 0.00},  -- #000000  void
+    j = {0.67, 0.28, 0.74},  -- #AB47BC  special
+    k = {1.00, 0.76, 0.03},  -- #FFC107  warning
+    l = {0.61, 0.80, 0.40},  -- #9CCC65  shield
+    m = {1.00, 1.00, 1.00},  -- #FFFFFF  highlight
+    n = {1.00, 0.25, 0.51},  -- #FF4081  special
+    o = {0.67, 0.61, 0.56},  -- #AB9B8E  hull alt
+    p = {1.00, 0.56, 0.00},  -- #FF8F00  engine
+}
+
+GridRenderer.DEFAULT_COLORS = DEFAULT_COLORS
+
 function GridRenderer.loadFont(font_size)
     local candidates = {
         "assets/fonts/NotoSansMono-Regular.ttf",
@@ -48,7 +70,7 @@ function GridRenderer.renderGrid(data_rows, palette, font_size, opts)
     local char_to_shape      = opts.char_to_shape      or {}
     local char_to_type       = opts.char_to_type       or {}
     local glyph_to_color_key = opts.glyph_to_color_key or {}
-    local default_colors     = opts.default_colors     or {}
+    local default_colors     = opts.default_colors     or DEFAULT_COLORS
 
     local tiles  = {}
     local width  = 0
