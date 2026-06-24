@@ -61,7 +61,7 @@ function World:draw(dt)
     if ship.mode == "interior" then
         -- Draw dark overlay over the whole world first so the outside
         -- world is blacked out, then draw the interior on top
-        love.graphics.setColor(0.05, 0.05, 0.08, 1)
+        love.graphics.setColor(0.12, 0.12, 0.18, 1)
         love.graphics.rectangle("fill",
             ship.x - 4000, ship.y - 4000, 8000, 8000)
     end

@@ -1,21 +1,7 @@
 -- lib/ship.lua
+local GridRenderer = require("lib.grid_renderer")
 local Ship = {}
 Ship.__index = Ship
-
-local function loadFont(font_size)
-    local candidates = {
-        "assets/fonts/NotoSansMono-Regular.ttf",
-        "assets/fonts/DejaVuSansMono.ttf",
-        "assets/fonts/font.ttf",
-    }
-    for _, path in ipairs(candidates) do
-        if love.filesystem.getInfo(path) then
-            return love.graphics.newFont(path, font_size)
-        end
-    end
-    -- Fall back to LÖVE default — box-drawing chars may not render
-    return love.graphics.newFont(font_size)
-end
 
 local CHAR_TO_GLYPH = {
     ["#"] = "█", ["@"] = "▓", ["."] = "░",
@@ -58,6 +44,15 @@ local CHAR_TYPE = {
     ["S"] = "shield",    ["E"] = "engine",
 }
 
+local CHAR_TO_SHAPE = {
+    ["#"] = "fill_rect", ["@"] = "fill_rect", ["."] = "fill_rect",
+    ["/"] = "tri_br",    ["\\"] = "tri_bl",
+    ["="] = "hbar",      ["|"] = "vbar",     ["-"] = "hbar",     ["!"] = "vbar",
+    ["["] = "corner_tl", ["]"] = "corner_tr",
+    ["{"] = "corner_bl", ["}"] = "corner_br",
+    ["+"] = "junction",
+}
+
 local DEFAULT_COLORS = {
     a = {0.55, 0.55, 0.62},
     b = {0.40, 0.40, 0.48},
@@ -69,107 +64,6 @@ local DEFAULT_COLORS = {
     h = {0.10, 0.50, 0.90},
 }
 
-local function splitChars(s)
-    local chars = {}
-    for c in s:gmatch(".[\128-\191]*") do
-        table.insert(chars, c)
-    end
-    return chars
-end
-
-local function resolveColor(glyph, palette)
-    local dk = CHAR_DEFAULTS[glyph]
-    if dk then
-        local entry = palette[dk] or DEFAULT_COLORS[dk]
-        if entry then return entry[1], entry[2], entry[3] end
-    end
-    return 0.7, 0.7, 0.7
-end
-
-local function parseLayer(data_rows, palette, font_size)
-    local tiles  = {}
-    local width  = 0
-    local height = #data_rows
-
-    if height == 0 then
-        local canvas = love.graphics.newCanvas(1, 1)
-        love.graphics.setCanvas(canvas)
-        love.graphics.clear(0, 0, 0, 0)
-        love.graphics.setCanvas()
-        return canvas, tiles, {}, 0, 0, 1, 1
-    end
-
-    for row, line in ipairs(data_rows) do
-        local chars = splitChars(line)
-        local n     = #chars
-        if n > width then width = n end
-
-        for ci, char in ipairs(chars) do
-            if char ~= " " then
-                local glyph = CHAR_TO_GLYPH[char] or char
-                local r, g, b = resolveColor(glyph, palette)
-                local shape = (char == "/" and "br")
-                           or (char == "\\" and "bl")
-                           or nil
-                tiles[#tiles + 1] = {
-                    glyph = glyph,
-                    col   = ci - 1,
-                    row   = row - 1,
-                    r     = r, g = g, b = b,
-                    shape = shape,
-                    char  = char,
-                    type  = CHAR_TYPE[char],
-                }
-            end
-        end
-    end
-
-    local pw     = width * font_size
-    local ph     = height * font_size
-    local canvas = love.graphics.newCanvas(pw, ph)
-    love.graphics.setCanvas(canvas)
-    love.graphics.clear(0, 0, 0, 0)
-
-    -- !! Use a Unicode-capable font from your assets folder
-    -- Place a .ttf with box-drawing support (e.g. NotoSansMono, DejaVuSansMono)
-    -- in assets/fonts/ and reference it here.
-    local font = loadFont(font_size)
-    love.graphics.setFont(font)
-
-    for _, t in ipairs(tiles) do
-        love.graphics.setColor(t.r, t.g, t.b)
-        local x = t.col * font_size
-        local y = t.row * font_size
-
-        if t.shape == "br" then
-            love.graphics.polygon("fill",
-                x,             y + font_size,
-                x + font_size, y + font_size,
-                x + font_size, y)
-        elseif t.shape == "bl" then
-            love.graphics.polygon("fill",
-                x, y,
-                x, y + font_size,
-                x + font_size, y + font_size)
-        elseif t.char == "#" or t.char == "@" or t.char == "." then
-            love.graphics.rectangle("fill", x, y, font_size, font_size)
-        else
-            love.graphics.print(t.glyph, x, y)
-        end
-    end
-
-    love.graphics.setCanvas()
-
-    local tiles_map = {}
-    for _, t in ipairs(tiles) do
-        local r0 = t.row
-        if not tiles_map[r0] then tiles_map[r0] = {} end
-        tiles_map[r0][t.col] = t
-    end
-
-    return canvas, tiles, tiles_map, width, height, pw, ph
-end
-
 local THRUSTER_CHARS = {
     ["v"] = "down", ["^"] = "up",
     ["<"] = "left", [">"] = "right",
@@ -178,7 +72,7 @@ local THRUSTER_CHARS = {
 local function autoDetectThrusters(data_rows)
     local thrusters = {}
     for row, line in ipairs(data_rows) do
-        local chars = splitChars(line)
+        local chars = GridRenderer.splitChars(line)
         for ci, char in ipairs(chars) do
             local dir = THRUSTER_CHARS[char]
             if dir then
@@ -203,7 +97,7 @@ local function detectInteractables(ext_rows, int_rows)
 
     local function scan(rows, layer)
         for row, line in ipairs(rows) do
-            local chars = splitChars(line)
+            local chars = GridRenderer.splitChars(line)
             for ci, char in ipairs(chars) do
                 local entry = { row = row, col = ci, layer = layer }
                 if char == "A" then
@@ -245,16 +139,24 @@ function Ship.new(data)
     self.y    = 0
     self.type = "ship"
 
+    local renderOpts = {
+        char_to_glyph      = CHAR_TO_GLYPH,
+        char_to_shape      = CHAR_TO_SHAPE,
+        char_to_type       = CHAR_TYPE,
+        glyph_to_color_key = CHAR_DEFAULTS,
+        default_colors     = DEFAULT_COLORS,
+    }
+
     self.ext_canvas, self.ext_tiles, self.ext_map,
         self.ext_width, self.ext_height,
         self.pixel_w,   self.pixel_h =
-            parseLayer(data.exterior, self.palette, self.font_size)
+            GridRenderer.renderGrid(data.exterior, self.palette, self.font_size, renderOpts)
 
     if data.interior then
         self.int_canvas, self.int_tiles, self.int_map,
             self.int_width, self.int_height,
             self.int_pixel_w, self.int_pixel_h =
-                parseLayer(data.interior, self.palette, self.font_size)
+                GridRenderer.renderGrid(data.interior, self.palette, self.font_size, renderOpts)
     end
 
     if data.thrusters and #data.thrusters > 0 then
