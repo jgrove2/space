@@ -10,8 +10,7 @@ EXTERIOR ONLY
 ─────────────────────────────────────────────────────
 Char  Purpose                        Color key
 ─────────────────────────────────────────────────────
- #    Hull body (solid mass)          a
- @    Outer hull border               b
+ #    Hull (solid mass)               a
  %    Damaged / vented hull           d
  /    Angled hull ↗ (tri: BL→TR→BR)  b
  \    Angled hull ↘ (tri: TL→BL→BR)  b
@@ -74,7 +73,9 @@ name: ShipName
 font_size: 24
 
 [exterior]
+[colors_exterior]   (optional - per-cell color overrides)
 [interior]
+[colors_interior]   (optional - per-cell color overrides)
 [thrusters]
 
 Rules that apply to ALL sections:
@@ -88,26 +89,26 @@ Rules that apply to ALL sections:
 EXTERIOR RULES
 ════════════════════════════════════════════════════════
 
-1.  The outermost ring of ship tiles must be @ (hull border)
+1.  The outermost ring of ship tiles must be # (hull border)
 2.  Everything inside that ring is # (hull body) unless detailed
 3.  Bow (top of grid) must taper to a point or narrow wedge
 4.  Hull widens toward midship, may taper or stay wide at stern
 5.  Use / and \ only at diagonal transitions in the hull silhouette
-    - / fills the triangle: bottom-left → top-right → bottom-right
-    - \ fills the triangle: top-left → bottom-left → bottom-right
-    - Never use / or \ in the middle of a flat hull face
+     - / fills the triangle: bottom-left → top-right → bottom-right
+     - \ fills the triangle: top-left → bottom-left → bottom-right
+     - Never use / or \ in the middle of a flat hull face
 6.  Add panel detail lines (- and |) across the hull body (#) tiles
-    to break up large flat areas. Space them 3-5 rows apart.
+     to break up large flat areas. Space them 3-5 rows apart.
 7.  Add windows (o) along the sides of the hull, typically 1-2 tiles
-    inward from the @ border
+     inward from the # border
 8.  Damage (%) is optional. Use it in clusters of 2-4 tiles if used.
 9.  Place thruster chars (v ^ < >) at every thrust point on the hull.
-    Main thrusters go at the stern (bottom). Maneuvering thrusters
-    may appear on the sides pointing left or right.
-10. Place A (airlock) on the hull border (@) where a door would
-    logically be. At least one airlock per ship on each side
-    (port and starboard) unless the design makes that impossible.
-    Airlock must be on a flat section of @, never on a / or \ tile.
+     Main thrusters go at the stern (bottom). Maneuvering thrusters
+     may appear on the sides pointing left or right.
+10. Place A (airlock) on the hull border (#) where a door would
+     logically be. At least one airlock per ship on each side
+     (port and starboard) unless the design makes that impossible.
+     Airlock must be on a flat section of #, never on a / or \ tile.
 11. Do NOT use interior-only characters in [exterior]
 
 ════════════════════════════════════════════════════════
@@ -116,11 +117,11 @@ INTERIOR RULES
 
 The interior represents what the player sees when walking inside.
 It must match the exterior hull boundary exactly:
-- Where exterior has @  → interior has @ (becomes an interior wall)
+- Where exterior has #  → interior has # (becomes an interior wall)
 - Where exterior has A  → interior has A (airlock visible from inside)
 - Where exterior has o  → interior has o (window visible from inside)
 - Where exterior is space → interior is space (outside ship)
-- Everything else inside the @ ring is yours to design as rooms
+- Everything else inside the # ring is yours to design as rooms
 
 ROOM LAYOUT BY SHIP CLASS
 ──────────────────────────
@@ -161,8 +162,8 @@ ROOM CONSTRUCTION RULES
 6.  Place ~ (energy conduits) in a connected path from engine room
     toward the bridge, typically running along corridor walls
 7.  C (captain's seat) goes in the bridge, facing the bow (top)
-8.  Every room must be fully enclosed by wall characters or the @
-    hull border — no open gaps in room walls
+8.  Every room must be fully enclosed by wall characters or the #
+     hull border — no open gaps in room walls
 9.  Every A in the interior must be reachable by walking through .
     floor tiles. Do not seal an airlock behind a wall.
 10. Do NOT use exterior-only characters in [interior]
@@ -185,6 +186,25 @@ Example:
 38,26,down
 20,5,right
 20,51,left
+
+════════════════════════════════════════════════════════
+COLOR OVERRIDE SECTIONS (optional)
+════════════════════════════════════════════════════════
+
+[colors_exterior]
+Format: row,col,color_key
+- row and col are 1-indexed matching the exterior grid position
+- color_key is a single letter a-p (see COLOR PALETTE above)
+- Only list cells that override the default character-based color
+- Example:
+  [colors_exterior]
+  3,5,c
+  3,6,c
+  12,8,f
+
+[colors_interior]
+Same sparse format as colors_exterior, for the interior grid.
+Only cells that differ from the character default need entries.
 
 ════════════════════════════════════════════════════════
 SHIP CLASS REFERENCE
@@ -215,8 +235,8 @@ QUALITY CHECKLIST — verify before outputting
 [ ] Every row in [exterior] and [interior] is exactly 55 characters
 [ ] Both grids have exactly 40 rows
 [ ] Exterior hull boundary matches interior hull boundary exactly
-[ ] Every @ on the exterior has a corresponding @ or A or o on the
-    interior at the same position
+[ ] Every # on the exterior has a corresponding # or A or o on the
+     interior at the same position
 [ ] Every A in the exterior also appears in the interior
 [ ] Every A in the interior is reachable by floor tiles
 [ ] No interior-only chars appear in [exterior]
@@ -233,5 +253,5 @@ OUTPUT REQUIREMENTS
 
 - Output ONLY the file content. No commentary, no explanation.
 - Do not wrap the output in a code block.
-- Do not add any section other than the four defined above.
+- Do not add any section other than: exterior, colors_exterior, interior, colors_interior, thrusters.
 - The file must be plain ASCII. No unicode outside of comments.

@@ -51,7 +51,20 @@ function GridRenderer.splitChars(s)
     return chars
 end
 
-local function resolveColor(glyph, palette, glyph_to_color_key, default_colors)
+local function resolveColor(glyph, palette, glyph_to_color_key, default_colors, color_map, row, col)
+    if color_map then
+        local row_data = color_map[row]
+        if row_data then
+            local ck = row_data[col]
+            if ck then
+                local entry = palette[ck]
+                if not entry then
+                    entry = default_colors and default_colors[ck]
+                end
+                if entry then return entry[1], entry[2], entry[3] end
+            end
+        end
+    end
     local dk = glyph_to_color_key and glyph_to_color_key[glyph]
     if dk then
         local entry = palette[dk]
@@ -71,6 +84,7 @@ function GridRenderer.renderGrid(data_rows, palette, font_size, opts)
     local char_to_type       = opts.char_to_type       or {}
     local glyph_to_color_key = opts.glyph_to_color_key or {}
     local default_colors     = opts.default_colors     or DEFAULT_COLORS
+    local color_map          = opts.color_map          or {}
 
     local tiles  = {}
     local width  = 0
@@ -92,7 +106,7 @@ function GridRenderer.renderGrid(data_rows, palette, font_size, opts)
         for ci, char in ipairs(chars) do
             if char ~= " " then
                 local glyph = char_to_glyph[char] or char
-                local r, g, b = resolveColor(glyph, palette, glyph_to_color_key, default_colors)
+                local r, g, b = resolveColor(glyph, palette, glyph_to_color_key, default_colors, color_map, row, ci)
                 local shape = char_to_shape[char] or "text"
                 tiles[#tiles + 1] = {
                     glyph = glyph,

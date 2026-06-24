@@ -16,7 +16,7 @@ local CHAR_TO_GLYPH = {
 }
 
 local CHAR_DEFAULTS = {
-    ["█"] = "a", ["▓"] = "b", ["░"] = "e",
+    ["█"] = "a", ["▓"] = "a", ["░"] = "e",
     ["╱"] = "b", ["╲"] = "b",
     ["═"] = "a", ["║"] = "a", ["─"] = "b", ["│"] = "b",
     ["╔"] = "a", ["╗"] = "a", ["╚"] = "a", ["╝"] = "a",
@@ -30,7 +30,7 @@ local CHAR_DEFAULTS = {
 }
 
 local CHAR_TYPE = {
-    ["#"] = "armor",     ["@"] = "hull",      ["."] = "deck",
+    ["#"] = "hull",      ["."] = "deck",
     ["/"] = "slant_se",  ["\\"] = "slant_sw",
     ["="] = "hwall",     ["|"] = "vwall",
     ["-"] = "hpanel",    ["!"] = "vpanel",
@@ -130,24 +130,33 @@ function Ship.new(data)
     self.y    = 0
     self.type = "ship"
 
-    local renderOpts = {
+    local extRenderOpts = {
         char_to_glyph      = CHAR_TO_GLYPH,
         char_to_shape      = CHAR_TO_SHAPE,
         char_to_type       = CHAR_TYPE,
         glyph_to_color_key = CHAR_DEFAULTS,
         default_colors     = DEFAULT_COLORS,
+        color_map          = data.colors_exterior,
     }
 
     self.ext_canvas, self.ext_tiles, self.ext_map,
         self.ext_width, self.ext_height,
         self.pixel_w,   self.pixel_h =
-            GridRenderer.renderGrid(data.exterior, self.palette, self.font_size, renderOpts)
+            GridRenderer.renderGrid(data.exterior, self.palette, self.font_size, extRenderOpts)
 
     if data.interior then
+        local intRenderOpts = {
+            char_to_glyph      = CHAR_TO_GLYPH,
+            char_to_shape      = CHAR_TO_SHAPE,
+            char_to_type       = CHAR_TYPE,
+            glyph_to_color_key = CHAR_DEFAULTS,
+            default_colors     = DEFAULT_COLORS,
+            color_map          = data.colors_interior,
+        }
         self.int_canvas, self.int_tiles, self.int_map,
             self.int_width, self.int_height,
             self.int_pixel_w, self.int_pixel_h =
-                GridRenderer.renderGrid(data.interior, self.palette, self.font_size, renderOpts)
+                GridRenderer.renderGrid(data.interior, self.palette, self.font_size, intRenderOpts)
     end
 
     if data.thrusters and #data.thrusters > 0 then
@@ -206,6 +215,8 @@ function Ship.loadFromFile(path)
         exterior  = {},
         interior  = nil,
         thrusters = {},
+        colors_exterior = {},
+        colors_interior = {},
     }
 
     local section = nil
@@ -251,6 +262,24 @@ function Ship.loadFromFile(path)
                 data.palette[k] = {
                     tonumber(r), tonumber(g), tonumber(b)
                 }
+            end
+
+        elseif section == "colors_exterior" then
+            local r, c, k = trimmed:match("^(%d+),(%d+),(%a)$")
+            if r and c and k then
+                local rn = tonumber(r)
+                local cn = tonumber(c)
+                data.colors_exterior[rn] = data.colors_exterior[rn] or {}
+                data.colors_exterior[rn][cn] = k
+            end
+
+        elseif section == "colors_interior" then
+            local r, c, k = trimmed:match("^(%d+),(%d+),(%a)$")
+            if r and c and k then
+                local rn = tonumber(r)
+                local cn = tonumber(c)
+                data.colors_interior[rn] = data.colors_interior[rn] or {}
+                data.colors_interior[rn][cn] = k
             end
 
         elseif section == nil then

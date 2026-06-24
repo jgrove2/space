@@ -37,6 +37,16 @@ body { font-family: 'Segoe UI', system-ui, sans-serif; background: #111; color: 
 .palette-group .chars .c.eraser { color: #555; font-size: 11px; }
 .palette-divider { border: none; border-top: 1px solid #2a2a3e; margin: 4px 12px; }
 
+/* Color swatches in palette */
+.color-swatches { display: grid; grid-template-columns: repeat(4, 1fr); gap: 3px; padding: 0 8px 6px; }
+.color-swatches .cs { aspect-ratio: 1; border-radius: 4px; border: 2px solid #444; cursor: pointer; display: flex; align-items: center; justify-content: center; min-height: 28px; }
+.color-swatches .cs:hover { border-color: #0af; transform: scale(1.1); }
+.color-swatches .cs.active { border-color: #fff; box-shadow: 0 0 8px rgba(255,255,255,0.3); }
+.color-swatches .cs .key-label { font-size: 9px; color: rgba(255,255,255,0.7); font-family: monospace; text-shadow: 0 1px 2px rgba(0,0,0,0.8); pointer-events: none; }
+
+/* Tool mode buttons */
+.toolbar button.tool-active { background: #0af; color: #000; border-color: #0af; font-weight: 600; }
+
 /* ── Center: Editor ── */
 .editor-area { flex: 1; display: flex; flex-direction: column; background: #0d0d1a; overflow: hidden; }
 .editor-tabs { display: flex; background: #16162a; border-bottom: 2px solid #333; flex-shrink: 0; }
@@ -92,6 +102,10 @@ body { font-family: 'Segoe UI', system-ui, sans-serif; background: #111; color: 
     <button onclick="saveFile()">Save</button>
     <button id="overlayBtn" onclick="toggleOverlay()" style="border-color:#555;color:#666">Overlay</button>
     <button id="symmetryBtn" onclick="toggleSymmetry()" style="border-color:#555;color:#666">Sym: Off</button>
+    <span style="color:#444;font-size:11px;margin:0 2px">|</span>
+    <button id="toolBrush" class="tool-active" onclick="setTool('brush')" title="Place tile characters">Brush</button>
+    <button id="toolPaint" onclick="setTool('paint')" title="Paint individual cell colors">Paint</button>
+    <button id="toolErase" onclick="setTool('erase')" title="Erase tile">Erase</button>
   </div>
   <div class="spacer"></div>
   <div class="info">
@@ -169,7 +183,7 @@ const DEFAULT_COLORS = {
 
 // Character -> color key mapping
 const CHAR_COLOR = {
-  '#': 'a', '@': 'b', '/': 'b', '\\': 'b',
+  '#': 'a', '@': 'a', '/': 'b', '\\': 'b',
   '.': 'e', '[': 'a', ']': 'a', '{': 'a', '}': 'a',
   '=': 'a', '!': 'b', '+': 'b', '~': 'h', 'C': 'g',
   'o': 'c', '-': 'b', '|': 'a', '*': 'h', 'A': 'c',
@@ -178,7 +192,7 @@ const CHAR_COLOR = {
 };
 
 const CHAR_DESC = {
-  '#': 'armor', '@': 'hull', '/': 'slant_se', '\\': 'slant_sw',
+  '#': 'hull', '/': 'slant_se', '\\': 'slant_sw',
   '.': 'deck', '[': 'corner_tl', ']': 'corner_tr', '{': 'corner_bl', '}': 'corner_br',
   '=': 'hwall', '!': 'vwall', '+': 'junction', '~': 'conduit', 'C': 'captain',
   'o': 'window', '-': 'hpanel', '|': 'vpanel', '*': 'console', 'A': 'airlock',
@@ -202,7 +216,7 @@ function glyph(ch) { return CHAR_TO_GLYPH[ch] || ch; }
 
 // Canonical type names for property assignment (matches ship.lua CHAR_TYPE)
 const CHAR_TYPE = {
-  '#': 'armor', '@': 'hull', '.': 'deck',
+  '#': 'hull', '.': 'deck',
   '/': 'slant_se', '\\': 'slant_sw',
   '=': 'hwall', '|': 'vwall', '-': 'hpanel', '!': 'vpanel',
   '+': 'junction', '~': 'conduit',
@@ -215,7 +229,7 @@ const CHAR_TYPE = {
 
 // Group definitions for palette
 const PALETTE_GROUPS = [
-  { label: 'Hull (Exterior)', chars: ['#', '@', '/', '\\'] },
+  { label: 'Hull', chars: ['#', '/', '\\'] },
   { label: 'Interior', chars: ['.', '[', ']', '{', '}', '=', '!', '+', '~', 'C', 'S', 'E'] },
   { label: 'Shared', chars: ['o', '-', '|', '*', 'A'] },
   { label: 'Thrusters', chars: ['v', '^', '<', '>'] },
@@ -246,9 +260,12 @@ let S = {
   exterior: [],
   interior: [],
   thrusters: [],
-  colors: JSON.parse(JSON.stringify(DEFAULT_COLORS)),
+  colorMapExt: {},
+  colorMapInt: {},
   activeLayer: 'exterior',
   selectedChar: '#',
+  selectedColor: 'a',
+  activeTool: 'brush',
   cellSize: 20,
   showOverlay: false,
   symmetry: false,
@@ -273,7 +290,7 @@ window.onload = function() {
 // ═══════════════════════════════════════════════════════════════
 function buildPalette() {
   const el = document.getElementById('palette');
-  el.innerHTML = '<h3>Palette</h3>';
+  el.innerHTML = '<h3>Tiles</h3>';
   const visible = LAYER_GROUPS[S.activeLayer] || [0, 1, 2, 3];
   PALETTE_GROUPS.forEach((g, gi) => {
     if (!visible.includes(gi)) return;
@@ -292,6 +309,31 @@ function buildPalette() {
   eg.className = 'palette-group';
   eg.innerHTML = `<label>Erase</label><div class="chars"><div class="c eraser${S.selectedChar === ' ' ? ' active' : ''}" data-char=" " onclick="selectChar(' ')">␣</div></div>`;
   el.appendChild(eg);
+
+  // Paint color swatches
+  const colorLabel = document.createElement('label');
+  colorLabel.style.cssText = 'font-size:11px;color:#888;display:block;padding:6px 8px 2px;text-transform:uppercase;letter-spacing:1px';
+  colorLabel.textContent = 'Paint Colors';
+  el.appendChild(colorLabel);
+  const cw = document.createElement('div');
+  cw.className = 'color-swatches';
+  const colorKeys = 'abcdefghijklmnop';
+  for (const k of colorKeys) {
+    const c = DEFAULT_COLORS[k];
+    const hex = rgbToHex(c[0], c[1], c[2]);
+    const swatch = document.createElement('div');
+    swatch.className = 'cs' + (k === S.selectedColor ? ' active' : '');
+    swatch.dataset.color = k;
+    swatch.style.background = hex;
+    swatch.title = k + ' - ' + CHAR_DESC_OF_KEY(k);
+    swatch.onclick = function() { selectPaintColor(k); };
+    const label = document.createElement('span');
+    label.className = 'key-label';
+    label.textContent = k;
+    swatch.appendChild(label);
+    cw.appendChild(swatch);
+  }
+  el.appendChild(cw);
 }
 
 function selectChar(c) {
@@ -299,6 +341,20 @@ function selectChar(c) {
   document.querySelectorAll('.palette-group .c').forEach(el => {
     el.classList.toggle('active', el.dataset.char === c);
   });
+}
+
+function selectPaintColor(key) {
+  S.selectedColor = key;
+  document.querySelectorAll('.color-swatches .cs').forEach(el => {
+    el.classList.toggle('active', el.dataset.color === key);
+  });
+}
+
+function setTool(tool) {
+  S.activeTool = tool;
+  document.getElementById('toolBrush').classList.toggle('tool-active', tool === 'brush');
+  document.getElementById('toolPaint').classList.toggle('tool-active', tool === 'paint');
+  document.getElementById('toolErase').classList.toggle('tool-active', tool === 'erase');
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -310,17 +366,6 @@ function buildProps() {
   html += `<label>Name</label><input type="text" id="propName" value="${S.name}" onchange="S.name=this.value;updateHeader()">`;
   html += `<label>Font Size</label><input type="number" id="propFontSize" value="${S.font_size}" min="8" max="64" onchange="S.font_size=+this.value;renderAll()">`;
   html += `<label>Grid</label><div style="font-size:12px;color:#888"><span id="propDims">${S.width}&times;${S.height}</span></div>`;
-  html += '<h3 style="margin-top:12px">Colors</h3>';
-  const keys = 'abcdefghijklmnop';
-  for (const k of keys) {
-    const c = S.colors[k];
-    const hex = rgbToHex(c[0], c[1], c[2]);
-    html += `<div class="color-row" onclick="editColor('${k}')" title="${CHAR_DESC_OF_KEY(k)}">`;
-    html += `<div class="key">${k}</div>`;
-    html += `<div class="swatch" style="background:${hex}"></div>`;
-    html += `<div class="val">${hex}</div>`;
-    html += `</div>`;
-  }
   html += '<h3 style="margin-top:12px">Thrusters</h3>';
   html += '<div class="thruster-list" id="thrusterList"></div>';
   if (S.activeLayer === 'preview') {
@@ -350,23 +395,6 @@ function updateThrusterList() {
 function rgbToHex(r, g, b) {
   const to = v => Math.round(v * 255).toString(16).padStart(2, '0');
   return '#' + to(r) + to(g) + to(b);
-}
-
-function editColor(key) {
-  const c = S.colors[key];
-  const hex = rgbToHex(c[0], c[1], c[2]);
-  const input = document.createElement('input');
-  input.type = 'color';
-  input.value = hex;
-  input.oninput = function() {
-    const r = parseInt(this.value.slice(1,3),16)/255;
-    const g = parseInt(this.value.slice(3,5),16)/255;
-    const b = parseInt(this.value.slice(5,7),16)/255;
-    S.colors[key] = [r, g, b];
-    buildProps();
-    renderAll();
-  };
-  input.click();
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -441,7 +469,13 @@ function getActiveGrid() {
   return S.exterior;
 }
 
-function drawGridOnCtx(ctx, grid) {
+function getActiveColorMap() {
+  if (S.activeLayer === 'exterior' || S.activeLayer === 'preview') return S.colorMapExt;
+  if (S.activeLayer === 'interior') return S.colorMapInt;
+  return S.colorMapExt;
+}
+
+function drawGridOnCtx(ctx, grid, colorMap) {
   const cs = S.cellSize;
   for (let r = 0; r < S.height; r++) {
     for (let c = 0; c < S.width; c++) {
@@ -449,8 +483,14 @@ function drawGridOnCtx(ctx, grid) {
       const x = c * cs, y = r * cs;
 
       if (ch !== ' ') {
-        const ck = CHAR_COLOR[ch];
-        const col = ck ? S.colors[ck] : [0.5, 0.5, 0.5];
+        let ck;
+        const hasOverride = colorMap && colorMap[r] && colorMap[r][c];
+        if (hasOverride) {
+          ck = colorMap[r][c];
+        } else {
+          ck = CHAR_COLOR[ch];
+        }
+        const col = ck ? DEFAULT_COLORS[ck] : [0.5, 0.5, 0.5];
         const hex = rgbToHex(col[0], col[1], col[2]);
 
         const fillChars = new Set(['#', '@', '.']);
@@ -478,6 +518,7 @@ function drawGridOnCtx(ctx, grid) {
           ctx.fillStyle = hex;
           ctx.fillText(glyph(ch), x + cs/2, y + cs/2);
         }
+
       } else {
         ctx.strokeStyle = '#ffffff08';
         ctx.strokeRect(x, y, cs, cs);
@@ -512,13 +553,15 @@ function renderGrid(previewTime) {
   // Draw overlay (other layer) if toggled on
   if (S.showOverlay && S.activeLayer !== 'preview') {
     const otherGrid = S.activeLayer === 'exterior' ? S.interior : S.exterior;
+    const otherMap = S.activeLayer === 'exterior' ? S.colorMapInt : S.colorMapExt;
     ctx.globalAlpha = 0.2;
-    drawGridOnCtx(ctx, otherGrid);
+    drawGridOnCtx(ctx, otherGrid, otherMap);
     ctx.globalAlpha = 1;
   }
 
   // Draw active grid on top
-  drawGridOnCtx(ctx, grid);
+  const activeMap = getActiveColorMap();
+  drawGridOnCtx(ctx, grid, activeMap);
 
   // Preview: animated thruster flames
   if (S.activeLayer === 'preview' && previewTime != null) {
@@ -590,7 +633,12 @@ document.addEventListener('DOMContentLoaded', function() {
     const r = Math.floor((e.offsetY - HANDLE_PAD) / S.cellSize);
     const c = Math.floor(e.offsetX / S.cellSize);
     if (r >= 0 && r < S.height && c >= 0 && c < S.width) {
-      placeWithSymmetry(r, c, ' ');
+      if (S.activeTool === 'brush') {
+        placeWithSymmetry(r, c, ' ');
+        eraseColorWithSymmetry(r, c);
+      } else {
+        eraseColorWithSymmetry(r, c);
+      }
       renderAll();
     }
   });
@@ -611,10 +659,20 @@ function dragAxis(e) {
 
 function placeWithSymmetry(r, c, ch) {
   setCell(r, c, ch);
+  if (ch !== ' ') {
+    setCellColor(r, c, S.selectedColor);
+  } else {
+    clearCellColor(r, c);
+  }
   if (S.symmetry) {
     const mc = Math.round(2 * S.symmetryAxis - c);
     if (mc >= 0 && mc < S.width && mc !== c) {
       setCell(r, mc, ch);
+      if (ch !== ' ') {
+        setCellColor(r, mc, S.selectedColor);
+      } else {
+        clearCellColor(r, mc);
+      }
     }
   }
 }
@@ -628,7 +686,14 @@ function paintAt(e) {
   const r = Math.floor((y - HANDLE_PAD) / S.cellSize);
   const c = Math.floor(x / S.cellSize);
   if (r >= 0 && r < S.height && c >= 0 && c < S.width) {
-    placeWithSymmetry(r, c, S.selectedChar);
+    if (S.activeTool === 'brush') {
+      placeWithSymmetry(r, c, S.selectedChar);
+    } else if (S.activeTool === 'paint') {
+      paintColorWithSymmetry(r, c, S.selectedColor);
+    } else if (S.activeTool === 'erase') {
+      placeWithSymmetry(r, c, ' ');
+      eraseColorWithSymmetry(r, c);
+    }
     renderAll();
   }
 }
@@ -641,6 +706,39 @@ function setCell(row, col, ch) {
   // If placing thruster on exterior, auto-manage thruster list
   if (S.activeLayer === 'exterior') {
     autoUpdateThrusters();
+  }
+}
+
+function paintColorWithSymmetry(r, c, key) {
+  setCellColor(r, c, key);
+  if (S.symmetry) {
+    const mc = Math.round(2 * S.symmetryAxis - c);
+    if (mc >= 0 && mc < S.width && mc !== c) {
+      setCellColor(r, mc, key);
+    }
+  }
+}
+
+function eraseColorWithSymmetry(r, c) {
+  clearCellColor(r, c);
+  if (S.symmetry) {
+    const mc = Math.round(2 * S.symmetryAxis - c);
+    if (mc >= 0 && mc < S.width && mc !== c) {
+      clearCellColor(r, mc);
+    }
+  }
+}
+
+function setCellColor(row, col, key) {
+  const map = getActiveColorMap();
+  if (!map[row]) map[row] = {};
+  map[row][col] = key;
+}
+
+function clearCellColor(row, col) {
+  const map = getActiveColorMap();
+  if (map[row]) {
+    delete map[row][col];
   }
 }
 
@@ -818,6 +916,8 @@ function initBlankShip(w, h) {
   S.exterior = [];
   S.interior = [];
   S.thrusters = [];
+  S.colorMapExt = {};
+  S.colorMapInt = {};
   S.symmetryLine = w / 2;
   S.symmetryAxis = w / 2 - 0.5;
   for (let r = 0; r < h; r++) {
@@ -889,12 +989,29 @@ function generateHull(w, h) {
 // ═══════════════════════════════════════════════════════════════
 // FILE SAVE/LOAD
 // ═══════════════════════════════════════════════════════════════
+function serializeColorMap(map) {
+  const lines = [];
+  for (let r = 0; r < S.height; r++) {
+    const row = map[r];
+    if (!row) continue;
+    for (let c = 0; c < S.width; c++) {
+      if (row[c]) {
+        lines.push(`${r + 1},${c + 1},${row[c]}`);
+      }
+    }
+  }
+  return lines;
+}
+
 function serializeShip() {
   const pad = (arr) => arr.map(row => {
     let s = (Array.isArray(row) ? row : new Array(S.width).fill(' ')).join('');
     while (s.length < S.width) s += ' ';
     return s;
   });
+
+  const colorExt = serializeColorMap(S.colorMapExt);
+  const colorInt = serializeColorMap(S.colorMapInt);
 
   const lines = [
     `name: ${S.name}`,
@@ -903,8 +1020,14 @@ function serializeShip() {
     '[exterior]',
     ...pad(S.exterior),
     '',
+    '[colors_exterior]',
+    ...(colorExt.length ? colorExt : ['']),
+    '',
     '[interior]',
     ...pad(S.interior),
+    '',
+    '[colors_interior]',
+    ...(colorInt.length ? colorInt : ['']),
     '',
     '[thrusters]',
     ...S.thrusters.map(t => `${t.row},${t.col},${t.dir}`),
@@ -952,6 +1075,8 @@ function parseShipFile(content) {
     exterior: [],
     interior: [],
     thrusters: [],
+    colorMapExt: {},
+    colorMapInt: {},
   };
 
   for (const raw of lines) {
@@ -983,6 +1108,20 @@ function parseShipFile(content) {
       const m = trimmed.match(/^(\d+),(\d+),(down|up|left|right)$/);
       if (m) {
         newShip.thrusters.push({ row: +m[1], col: +m[2], dir: m[3] });
+      }
+    } else if (section === 'colors_exterior') {
+      const m = trimmed.match(/^(\d+),(\d+),([a-p])$/);
+      if (m) {
+        const r = +m[1] - 1, c = +m[2] - 1;
+        if (!newShip.colorMapExt[r]) newShip.colorMapExt[r] = {};
+        newShip.colorMapExt[r][c] = m[3];
+      }
+    } else if (section === 'colors_interior') {
+      const m = trimmed.match(/^(\d+),(\d+),([a-p])$/);
+      if (m) {
+        const r = +m[1] - 1, c = +m[2] - 1;
+        if (!newShip.colorMapInt[r]) newShip.colorMapInt[r] = {};
+        newShip.colorMapInt[r][c] = m[3];
       }
     }
   }
@@ -1016,6 +1155,8 @@ function parseShipFile(content) {
   S.exterior = pad(newShip.exterior, S.height, S.width);
   S.interior = pad(newShip.interior, S.height, S.width);
   S.thrusters = newShip.thrusters;
+  S.colorMapExt = newShip.colorMapExt || {};
+  S.colorMapInt = newShip.colorMapInt || {};
   S.symmetryLine = S.width / 2;
   S.symmetryAxis = S.width / 2 - 0.5;
 
