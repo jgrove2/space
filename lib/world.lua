@@ -1,176 +1,131 @@
--- lib/world.lua
-local EntityManager = require("lib.entity_manager")
-local Player        = require("lib.player")
-local Ship          = require("lib.ship")
-local ShipRenderer  = require("lib.ship_renderer")
-local Interaction   = require("lib.interaction")
+local EntityManager   = require("lib.entity_manager")
+local Ship            = require("lib.ship")
+local Camera          = require("lib.camera")
+local ShipRenderer    = require("lib.ship_renderer")
+local Config          = require("lib.config")
+local RenderSystem    = require("lib.systems.render_system")
+local Spawn           = require("lib.spawn")
+
+local SYSTEMS = {
+    require("lib.systems.input_system"),
+    require("lib.systems.pilot_system"),
+    require("lib.systems.movement_system"),
+    require("lib.systems.collision_system"),
+    require("lib.systems.interaction_system"),
+    require("lib.systems.boarding_system"),
+    require("lib.systems.camera_system"),
+}
 
 local World = {}
 World.__index = World
 
 function World.new()
     local self = setmetatable({}, World)
+    self.registry = EntityManager.new()
+    self.camera   = Camera.new(Config.W, Config.H)
 
-    self.entities = EntityManager.new()
+    local ship_id = Ship.spawn(self, "ships/flatiron_ship.txt", 0, 0, 0)
+    self.player_ship_id = ship_id
 
-    local ship   = Ship.loadFromFile("ships/flatiron_ship.txt")
-    local pw, ph = ship:getPixelSize()
-    ship.x       = -pw / 2
-    ship.y       = -ph / 2
-    ship.type    = "ship"
-    ship.update  = function(s, dt) ShipRenderer.update(s, dt) end
-    ship.draw    = function(s, dt)
-        ShipRenderer.drawWorld(s, s.x, s.y, dt)
-    end
+    Spawn.spawn(self, "asteroid", "ships/asteroid1.txt", 800, 0, 0)
 
-    self.player_ship_id = self.entities:add(ship)
+    local fs = Config.font_size
+    local ship_gb = self.registry:getComponent(ship_id, "grid_body")
+    local ship_layer = ship_gb and ship_gb.layers["exterior"]
 
-    self.player   = Player.new(0, 0, ship.font_size)
-    self.player.x = ship.x + pw / 2
-    self.player.y = ship.y + ph / 2
+    local player_id = self.registry:addEntity()
+    self.registry:addComponent(player_id, "transform", {
+        x = ship_layer and ship_layer.pixel_w / 2 or 0,
+        y = ship_layer and ship_layer.pixel_h / 2 or 0,
+        angle = 0, scale = 1, origin = "center",
+    })
+    self.registry:addComponent(player_id, "velocity", { vx = 0, vy = 0, vθ = 0 })
+    self.registry:addComponent(player_id, "controlled_by", { by = "player" })
+    self.registry:addComponent(player_id, "collider", { kind = "player", solid = true })
 
-    self.interaction = Interaction.new()
+    local player_canvas = love.graphics.newCanvas(fs, fs)
+    love.graphics.setCanvas(player_canvas)
+    love.graphics.clear(0, 0, 0, 0)
+    love.graphics.setColor(0.30, 0.80, 1.00, 0.9)
+    love.graphics.rectangle("fill", 0, 0, fs, fs)
+    love.graphics.setCanvas()
 
-    -- Piloting state
-    self.piloting_ship = nil
+    self.registry:addComponent(player_id, "grid_body", {
+        layers = {
+            exterior = {
+                canvas    = player_canvas,
+                tiles     = {},
+                tile_map  = {},
+                grid_w    = 1,
+                grid_h    = 1,
+                pixel_w   = fs,
+                pixel_h   = fs,
+                collision = { [1] = { [1] = true } },
+            },
+        },
+        active_layer = "exterior",
+        font_size    = fs,
+        bounds       = { w = fs, h = fs },
+    })
+    self.player_id = player_id
+
+    self.interaction_state  = "idle"
+    self.interaction_prompt = nil
+    self.interaction_action = nil
+    self.near_ship_id       = nil
+    self.near_tile          = nil
+    self.piloting_ship      = nil
 
     return self
 end
 
--- ── Update ────────────────────────────────────────────────────────────────
-
 function World:update(dt)
-    self.entities:update(dt)
-
-    -- Player movement is locked while piloting
-    if not self.piloting_ship then
-        self.player:update(dt)
-        self:_clampPlayerToShipIfInside()
+    for _, system in ipairs(SYSTEMS) do
+        system.update(dt, self)
     end
-
-    self.interaction:update(
-        self.player,
-        self.entities.entities,
-        nil -- font_size unused in Interaction, ships carry it themselves
-    )
-end
-
-function World:draw(dt)
-    local ship = self.entities:get(self.player_ship_id)
-
-    if ship.mode == "interior" then
-        -- Draw dark overlay over the whole world first so the outside
-        -- world is blacked out, then draw the interior on top
-        love.graphics.setColor(0.12, 0.12, 0.18, 1)
-        love.graphics.rectangle("fill",
-            ship.x - 4000, ship.y - 4000, 8000, 8000)
-    end
-
-    -- Draw all entities (ships handle their own mode internally)
-    self.entities:draw(dt)
-
-    -- Player is drawn on top of ship but below UI
-    if not self.piloting_ship then
-        self.player:draw()
+    for _, id in ipairs(self.registry:query("ship_stats")) do
+        local ss = self.registry:getComponent(id, "ship_stats")
+        if ss then
+            ss.thruster_time = ss.thruster_time + dt
+        end
     end
 end
 
--- ── Keypressed ────────────────────────────────────────────────────────────
+function World:draw()
+    RenderSystem.draw(self)
+end
 
 function World:keypressed(key)
-    if key == "f" then
-        local cmd = self.interaction:interact(self.player)
-        if cmd then self:_handleInteraction(cmd) end
-    end
-end
+    if key ~= "f" then return end
 
--- ── Interaction handler ───────────────────────────────────────────────────
-
-function World:_handleInteraction(cmd)
-    if cmd.action == "board" then
-        local ship = cmd.ship
-        ship:setMode("interior")
-
-        -- Find the matching interior airlock tile and teleport player there
-        local dest = self:_findMatchingAirlock(ship, cmd.tile, "interior")
-        if dest then
-            local wx, wy = ship:gridToWorld(dest.row, dest.col)
-            self.player.x = wx
-            self.player.y = wy
-        end
-        self.player.inside_ship = ship
-
-    elseif cmd.action == "disembark" then
-        local ship = cmd.ship
-        ship:setMode("exterior")
-
-        -- Place player just outside the exterior airlock tile
-        local dest = self:_findMatchingAirlock(ship, cmd.tile, "exterior")
-        if dest then
-            local wx, wy = ship:gridToWorld(dest.row, dest.col)
-            -- Offset one tile outward so player is outside hull
-            wy = wy + ship.font_size
-            self.player.x = wx
-            self.player.y = wy
-        end
-        self.player.inside_ship = nil
-
-    elseif cmd.action == "start_pilot" then
-        self.piloting_ship = cmd.ship
-
-    elseif cmd.action == "stop_pilot" then
-        self.piloting_ship = nil
-    end
-end
-
-function World:_findMatchingAirlock(ship, source_tile, target_layer)
-    local src_wx, src_wy = ship:gridToWorld(source_tile.row, source_tile.col)
-    local best, best_dist
-    for _, a in ipairs(ship.airlocks) do
-        if a.layer == target_layer then
-            local awx, awy = ship:gridToWorld(a.row, a.col)
-            local dx, dy   = awx - src_wx, awy - src_wy
-            local dist     = dx * dx + dy * dy
-            if not best or dist < best_dist then
-                best, best_dist = a, dist
-            end
-        end
-    end
-    return best
-end
-
--- Clamp player position to the interior hull if they are inside a ship.
--- Prevents walking through walls (simple bounding-box clamp for now;
--- tile-level collision can replace this later).
-function World:_clampPlayerToShipIfInside()
-    local ship = self.player.inside_ship
-    if not ship then return end
-
-    local hs  = self.player.size / 2
-    local min_x = ship.x + hs
-    local min_y = ship.y + hs
-    local max_x = ship.x + ship.pixel_w - hs
-    local max_y = ship.y + ship.pixel_h - hs
-
-    self.player.x = math.max(min_x, math.min(max_x, self.player.x))
-    self.player.y = math.max(min_y, math.min(max_y, self.player.y))
-end
-
-function World:getPlayerPosition()
-    -- When piloting, camera follows the ship center instead
-    if self.piloting_ship then
-        local ship = self.piloting_ship
-        local pw, ph = ship:getPixelSize()
-        return {
-            x = ship.x + pw / 2,
-            y = ship.y + ph / 2,
+    if self.interaction_state == "near_airlock_enter" and self.near_ship_id then
+        self.interaction_state = "idle"
+        self.interaction_action = {
+            action = "board",
+            ship_id = self.near_ship_id,
+            tile = self.near_tile,
+        }
+    elseif self.interaction_state == "near_airlock_exit" and self.near_ship_id then
+        self.interaction_state = "idle"
+        self.interaction_action = {
+            action = "disembark",
+            ship_id = self.near_ship_id,
+            tile = self.near_tile,
+        }
+    elseif self.interaction_state == "near_captain" then
+        self.interaction_state = "piloting"
+        self.interaction_prompt = "[F] Leave Helm"
+        self.interaction_action = {
+            action = "start_pilot",
+            ship_id = self.near_ship_id,
+        }
+    elseif self.interaction_state == "piloting" then
+        self.interaction_state = "idle"
+        self.interaction_prompt = nil
+        self.interaction_action = {
+            action = "stop_pilot",
         }
     end
-    return self.player:getPosition()
-end
-
-function World:getInteraction()
-    return self.interaction
 end
 
 return World

@@ -1,4 +1,6 @@
 -- lib/camera.lua
+local Config = require("lib.config")
+
 local Camera = {}
 Camera.__index = Camera
 
@@ -6,7 +8,7 @@ function Camera.new(W, H)
     return setmetatable({
         x = 0, y = 0,
         W = W, H = H,
-        lerp_speed = 8,
+        lerp_speed = Config.camera_lerp_speed,
     }, Camera)
 end
 

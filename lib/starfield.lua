@@ -3,16 +3,16 @@ local Starfield = {}
 Starfield.__index = Starfield
 
 function Starfield.new(count, W, H)
+    local rng = love.math.newRandomGenerator(42)
     local self = setmetatable({ stars = {}, W = W, H = H }, Starfield)
-    math.randomseed(42)
     for i = 1, count do
         self.stars[i] = {
             -- Store as fractions so they tile infinitely
-            fx          = math.random(),
-            fy          = math.random(),
-            r           = math.random(1, 2),
-            brightness  = math.random(80, 255) / 255,
-            parallax    = math.random(20, 80) / 1000, -- 0.02 – 0.08
+            fx          = rng:random(),
+            fy          = rng:random(),
+            r           = rng:random(1, 2),
+            brightness  = rng:random(80, 255) / 255,
+            parallax    = rng:random(20, 80) / 1000, -- 0.02 – 0.08
         }
     end
     return self

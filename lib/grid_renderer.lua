@@ -7,6 +7,8 @@
 
 local GridRenderer = {}
 
+local font_cache = {}
+
 -- Default color palette (canonical source — 16 colors a–p)
 local DEFAULT_COLORS = {
     a = {0.62, 0.62, 0.62},  -- #9E9E9E  hull, thick walls
@@ -30,6 +32,9 @@ local DEFAULT_COLORS = {
 GridRenderer.DEFAULT_COLORS = DEFAULT_COLORS
 
 function GridRenderer.loadFont(font_size)
+    if font_cache[font_size] then
+        return font_cache[font_size]
+    end
     local candidates = {
         "assets/fonts/NotoSansMono-Regular.ttf",
         "assets/fonts/DejaVuSansMono.ttf",
@@ -37,10 +42,12 @@ function GridRenderer.loadFont(font_size)
     }
     for _, path in ipairs(candidates) do
         if love.filesystem.getInfo(path) then
-            return love.graphics.newFont(path, font_size)
+            font_cache[font_size] = love.graphics.newFont(path, font_size)
+            return font_cache[font_size]
         end
     end
-    return love.graphics.newFont(font_size)
+    font_cache[font_size] = love.graphics.newFont(font_size)
+    return font_cache[font_size]
 end
 
 function GridRenderer.splitChars(s)

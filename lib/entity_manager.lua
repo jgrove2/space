@@ -1,62 +1,86 @@
--- lib/entity_manager.lua
---
--- Manages all world entities: ships, asteroids, planets, stations, etc.
--- Each entity must implement:
---   entity:update(dt)
---   entity:draw(dt)
---   entity.x, entity.y        (world position)
---   entity.type               (string: "ship", "asteroid", "planet", etc.)
---
--- Future work: spatial hashing / quadtree for large entity counts.
-
 local EntityManager = {}
 EntityManager.__index = EntityManager
 
 function EntityManager.new()
     return setmetatable({
-        entities = {},
-        _next_id = 1,
+        _entities   = {},
+        _components = {},
+        _next_id    = 1,
     }, EntityManager)
 end
 
-function EntityManager:add(entity)
+function EntityManager:addEntity()
     local id = self._next_id
     self._next_id = self._next_id + 1
-    entity._id = id
-    self.entities[id] = entity
+    self._entities[id] = true
     return id
 end
 
-function EntityManager:remove(id)
-    self.entities[id] = nil
+function EntityManager:removeEntity(id)
+    self._entities[id] = nil
+    for _, comps in pairs(self._components) do
+        comps[id] = nil
+    end
 end
 
-function EntityManager:get(id)
-    return self.entities[id]
+function EntityManager:alive(id)
+    return self._entities[id] ~= nil
 end
 
--- Return all entities matching a type string
-function EntityManager:getByType(type_str)
+function EntityManager:addComponent(id, name, data)
+    if not self._entities[id] then return end
+    if not self._components[name] then
+        self._components[name] = {}
+    end
+    self._components[name][id] = data
+end
+
+function EntityManager:getComponent(id, name)
+    local comps = self._components[name]
+    return comps and comps[id] or nil
+end
+
+function EntityManager:removeComponent(id, name)
+    local comps = self._components[name]
+    if comps then comps[id] = nil end
+end
+
+function EntityManager:hasComponent(id, name)
+    local comps = self._components[name]
+    return comps and comps[id] ~= nil
+end
+
+function EntityManager:query(...)
+    local names = { ... }
+    if #names == 0 then
+        local ids = {}
+        for id in pairs(self._entities) do
+            ids[#ids + 1] = id
+        end
+        return ids
+    end
+
+    local base = self._components[names[1]]
+    if not base then return {} end
+
     local result = {}
-    for _, e in pairs(self.entities) do
-        if e.type == type_str then
-            result[#result + 1] = e
+    for id in pairs(base) do
+        if self._entities[id] then
+            local ok = true
+            for i = 2, #names do
+                local c = self._components[names[i]]
+                if not c or not c[id] then ok = false; break end
+            end
+            if ok then result[#result + 1] = id end
         end
     end
     return result
 end
 
-function EntityManager:update(dt)
-    for _, e in pairs(self.entities) do
-        if e.update then e:update(dt) end
-    end
-end
-
-function EntityManager:draw(dt)
-    -- TODO: depth sort by entity.y or entity.z_order when needed
-    for _, e in pairs(self.entities) do
-        if e.draw then e:draw(dt) end
-    end
+function EntityManager:count()
+    local n = 0
+    for _ in pairs(self._entities) do n = n + 1 end
+    return n
 end
 
 return EntityManager
